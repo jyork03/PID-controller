@@ -1,7 +1,9 @@
 #include <uWS/uWS.h>
 #include <iostream>
+#include <vector>
 #include "json.hpp"
 #include "PID.h"
+#include "twiddle.h"
 #include <math.h>
 
 // for convenience
@@ -33,29 +35,41 @@ int main()
   uWS::Hub h;
 
   PID steerPid;
+  PID throttlePid;
   // TODO: Initialize the pid variable.
 //  std::vector<double> p = {0.267467, 0.002, 9.33626};
-  std::vector<double> p = {0.157101, 0.00118952, 8.86528};
+  // throttle p
+  std::vector<double> tp = {0.25, 0.002, 10.0};
+//  std::vector<double> p = {0.157101, 0.00118952, 8.86528};
 //  std::vector<double> p = {2.8541, 0.0015, 9.20589};
 //  std::vector<double> p = {0.0569862, 0.00101864, 3.9014};
-//  std::vector<double> p = {0.0, 0.0, 0.0};
-  // 0.41601, 0, 5.75949
+//  std::vector<double> p = {0.268432, 0.00018952, 9.41039};
+  std::vector<double> p = {0.0, 0.0, 0.0};
 //  3.30619, -0.000949124, 9.89487: error of 0.0535367
-  std::vector<double> dp = {0.1, 0.001, 0.1};
+  std::vector<double> dp = {1.0, 0.01, 1.0};
+//  std::vector<double> dp = {0.000271154, 3.01282e-06, 0.000328096};
+  std::vector<double> tdp = {0.000271154, 3.01282e-06, 0.000328096};
 //  std::vector<double> dp = {0.0261852, 3.20042e-05, 0.0214243};
 
-  int i = 0;
-  int k = 0;
-  int step = 0;
+//  int i = 0;
+//  int k = 0;
+//  int step = 0;
   int totalTimeSteps = 10000;
-  float throttle = 0.5;
+  double target_throttle = 0.4;
 
-  steerPid.best_t_error = 0.0; // pick up where we left off
+//  steerPid.best_t_error = 0.0;
+//  throttlePid.best_t_error = 0.0;
 
-  steerPid.Init(p[0], p[1], p[2]);
+  steerPid.Init(p);
+  throttlePid.Init(tp);
 
 
+  // Should probably only update one at a time
   steerPid.optimizing = true;
+  throttlePid.optimizing = false;
+
+  Twiddle steerTwiddle(p, dp, totalTimeSteps);
+  Twiddle trottleTwiddle(tp, tdp, totalTimeSteps);
 
   h.onMessage([&](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
@@ -72,7 +86,7 @@ int main()
           double cte = std::stod(j[1]["cte"].get<std::string>());
           double speed = std::stod(j[1]["speed"].get<std::string>());
           double angle = std::stod(j[1]["steering_angle"].get<std::string>());
-          double steer_value;
+          double steer_value, throttle;
           /*
           * TODO: Calcuate steering value here, remember the steering value is
           * [-1, 1].
@@ -80,30 +94,50 @@ int main()
           * another PID controller to control the speed!
           */
 
+          // update the proportional, integral and derivative cross-track error
           steerPid.UpdateError(cte);
 
-          // the car in the sim can handle a steering angle between -1 and 1 radian.
-//          steer_value = deg2rad(steerPid.TotalError());
-//          steer_value = steerPid.TotalError();
-          steer_value = steerPid.TotalError() / deg2rad(25.0);
+          // update the proportional, integral and derivative target throttle error
+          double tte = speed - (target_throttle * 100.0); // target throttle error
+          throttlePid.UpdateError(tte);
+
+          // normalize to the range of accepted steering angles -25 to 25 (50 total)
+          steer_value = steerPid.TotalError() / deg2rad(50.0);
+          // limit the steer_value from -1.0 to 1.0
           if(steer_value > 1.0) steer_value = 1.0;
           if(steer_value < -1.0) steer_value = -1.0;
+
+          // normalize to the range of accepted
+//          throttle = throttlePid.TotalError() / 100.0;
+          throttle = 0.5;
+          // limit the throttle from 0.0 to 1.0
+          if(throttle > 1.0) throttle = 1.0;
+          if(throttle < 0.0) throttle = 0.0;
 
           // DEBUG
 //          std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
 
+          if(throttlePid.optimizing) {
+
+          } else {
+            json msgJson;
+            msgJson["steering_angle"] = steer_value;
+            msgJson["throttle"] = throttle;
+            auto msg = "42[\"steer\"," + msgJson.dump() + "]";
+            std::cout << msg << std::endl;
+            ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+          }
+
 
           if(steerPid.optimizing) {
 
-            if(i < totalTimeSteps) {
+            if(steerTwiddle.i < steerTwiddle.totalSteps) {
 
 
               if(fabs(cte) > 4.0) {
                 // if the car goes off the track, add the square of the cross-track
                 // error for each future timestep until totalTimeSteps
-                steerPid.t_error += (totalTimeSteps - i) * (4.0 * 4.0);
-
-                i = totalTimeSteps; // just skip to finish
+                steerTwiddle.ExitEarly(4.0);
 
               } else {
                 json msgJson;
@@ -112,81 +146,82 @@ int main()
                 auto msg = "42[\"steer\"," + msgJson.dump() + "]";
                 ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
 
-                steerPid.t_error += (cte * cte);
-
-                i++;
+                steerTwiddle.UpdateOnTimeStep(cte);
+//                steerPid.t_error += (cte * cte);
+//
+//                i++;
               }
 
             }
-            if(steerPid.t_error == 16.0 * totalTimeSteps) {
+            if(steerTwiddle.error == 16.0 * steerTwiddle.totalSteps) {
               // prevent erroneous second pass due to asynchronous nature of the socket connection
+              // Extra frames from the simulation were being received before the
 
               // reset values
-              i = 0;
-              steerPid.t_error = 0.0;
-              steerPid.p_error = 0.0;
-              steerPid.i_error = 0.0;
-              steerPid.d_error = 0.0;
+//              i = 0;
+//              steerPid.t_error = 0.0;
+//              steerPid.p_error = 0.0;
+//              steerPid.i_error = 0.0;
+//              steerPid.d_error = 0.0;
+              // reset values
+              steerTwiddle.Reset();
+              steerPid.Init(p);
 
               std::string msg = "42[\"reset\",{}]";
               ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
               return;
             }
-            if(i == totalTimeSteps) {
+            if(steerTwiddle.i == steerTwiddle.totalSteps) {
               // check exactly equal to totalTimeSteps.  A simple else clause was getting fired twice
               std::cout << "cte: " << cte << std::endl;
-              std::cout << "step: " << step % 2 << std::endl;
+              std::cout << "step: " << steerTwiddle.step % 2 << std::endl;
               std::cout << "Using Coeffecients: " << p[0] << ", " << p[1] << ", " << p[2] << std::endl;
               std::cout << "dp: " << dp[0] << ", " << dp[1] << ", " << dp[2] << std::endl;
 
-              steerPid.t_error = steerPid.t_error / i; // mean squared
-
-              // Kp: coeff == 0 , Ki: coeff == 1, Kd: coeff == 2
-              int coeff = k % 3;
-
-              if(steerPid.best_t_error == 0.0) {
-                // first time through
-                steerPid.best_t_error = steerPid.t_error;
-
-                p[coeff] += dp[coeff];
-              } else {
-                std::cout << "error: " << steerPid.t_error << " best error: " << steerPid.best_t_error << std::endl;
-
-                if(step % 2 == 0) {
-                  if(steerPid.t_error < steerPid.best_t_error) {
-                    steerPid.best_t_error = steerPid.t_error;
-                    dp[coeff] *= 1.1;
-                  } else {
-                    p[coeff] -= 2 * dp[coeff];
-                  }
-                } else if(step % 2  == 1) {
-                  if(steerPid.t_error < steerPid.best_t_error) {
-                    steerPid.best_t_error = steerPid.t_error;
-                    dp[coeff] *= 1.1;
-                  } else {
-                    p[coeff] += dp[coeff];
-                    dp[coeff] *= 0.9;
-                  }
-
-                  // go ahead and add the next coefficient
-                  p[(k + 1) % 3] += dp[(k + 1) % 3];
-
-                  k++;
-                }
-
-                step++;
-              }
+              steerTwiddle.Run();
+//              steerPid.t_error = steerPid.t_error / i; // mean squared
+//
+//              // Kp: coeff == 0 , Ki: coeff == 1, Kd: coeff == 2
+//              int coeff = k % 3;
+//
+//              if(steerPid.best_t_error == 0.0) {
+//                // first time through
+//                steerPid.best_t_error = steerPid.t_error;
+//
+//                p[coeff] += dp[coeff];
+//              } else {
+//                std::cout << "error: " << steerPid.t_error << " best error: " << steerPid.best_t_error << std::endl;
+//
+//                if(step % 2 == 0) {
+//                  if(steerPid.t_error < steerPid.best_t_error) {
+//                    steerPid.best_t_error = steerPid.t_error;
+//                    dp[coeff] *= 1.1;
+//                  } else {
+//                    p[coeff] -= 2 * dp[coeff];
+//                  }
+//                } else if(step % 2  == 1) {
+//                  if(steerPid.t_error < steerPid.best_t_error) {
+//                    steerPid.best_t_error = steerPid.t_error;
+//                    dp[coeff] *= 1.1;
+//                  } else {
+//                    p[coeff] += dp[coeff];
+//                    dp[coeff] *= 0.9;
+//                  }
+//
+//                  // go ahead and add the next coefficient
+//                  p[(k + 1) % 3] += dp[(k + 1) % 3];
+//
+//                  k++;
+//                }
+//
+//                step++;
+//              }
 
 
               if(dp[0] + dp[1] + dp[2] > 0.00001) {
                 // reset values
-                i = 0;
-                steerPid.t_error = 0.0;
-                steerPid.p_error = 0.0;
-                steerPid.i_error = 0.0;
-                steerPid.d_error = 0.0;
-
-                steerPid.Init(p[0], p[1], p[2]);
+                steerTwiddle.Reset();
+                steerPid.Init(p);
 
                 std::string msg = "42[\"reset\",{}]";
                 ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);

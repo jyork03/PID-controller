@@ -1,6 +1,8 @@
 #ifndef PID_H
 #define PID_H
 
+#include <vector>
+
 class PID {
 public:
 
@@ -18,10 +20,16 @@ public:
   double Ki;
   double Kd;
 
+
   /*
-  * Twiddle Error
+  * Twiddle Vars
   */
+
+  // Twiddle Iteration
+  int i;
+  // Twiddle Error
   double t_error;
+  // Best Twiddle Error
   double best_t_error;
   bool optimizing;
 
@@ -38,7 +46,7 @@ public:
   /*
   * Initialize PID.
   */
-  void Init(double Kp, double Ki, double Kd);
+  void Init(std::vector<double> p);
 
   /*
   * Update the PID error variables given cross track error.
@@ -50,10 +58,6 @@ public:
   */
   double TotalError();
 
-  /*
-  * Run Twiddle Optimization on Coefficients
-  */
-  void Twiddle();
 };
 
 #endif /* PID_H */

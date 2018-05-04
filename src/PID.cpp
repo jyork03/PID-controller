@@ -10,11 +10,14 @@ PID::PID() {}
 
 PID::~PID() {}
 
-void PID::Init(double Kp, double Ki, double Kd) {
-  this->Kp = Kp;
-  this->Ki = Ki;
-  this->Kd = Kd;
-  this->optimizing = true;
+void PID::Init(std::vector<double> p) {
+  Kp = p[0];
+  Ki = p[1];
+  Kd = p[2];
+
+  p_error = 0.0;
+  i_error = 0.0;
+  d_error = 0.0;
 }
 
 void PID::UpdateError(double cte) {
@@ -31,7 +34,3 @@ void PID::UpdateError(double cte) {
 double PID::TotalError() {
   return - Kp * p_error - Kd * d_error - Ki * i_error;
 }
-
-void PID::Twiddle() {
-}
-
