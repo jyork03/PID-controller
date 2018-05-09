@@ -16,11 +16,12 @@ public:
   int j;
   int step;
   int totalSteps;
+  int firstNIgnoredSteps;
   double error;
   double best_mse;
+  double maxError;
 
-//  std::vector<double> p;
-//  std::vector<double> dp;
+  std::vector<double> dp;
 
   /*
   * Constructor
@@ -34,13 +35,13 @@ public:
 
   void Reset();
 
-  void ExitEarly(double maxError);
+  void ExitEarly();
 
   void UpdateOnTimeStep(double errorOnTimeStep);
 
-  void UpdateCoefficients(std::vector<double> &p, std::vector<double> &dp);
+  void UpdateCoefficients(std::vector<double> &p);
 
-  void Run(double error_t, uWS::WebSocket<uWS::SERVER> &ws, PID &pid, bool outOfBounds);
+  void Run(double error_t, uWS::WebSocket<uWS::SERVER> &ws, PID &pid, bool outOfBounds, std::string msg);
 };
 
 

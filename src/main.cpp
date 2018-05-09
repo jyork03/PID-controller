@@ -36,39 +36,22 @@ int main()
 
   PID steerPid;
   PID throttlePid;
-  // TODO: Initialize the pid variable.
-//  std::vector<double> p = {0.267467, 0.002, 9.33626};
-  // throttle p
-  std::vector<double> tp = {0.25, 0.002, 10.0};
-//  std::vector<double> p = {0.157101, 0.00118952, 8.86528};
-//  std::vector<double> p = {2.8541, 0.0015, 9.20589};
-//  std::vector<double> p = {0.0569862, 0.00101864, 3.9014};
-//  std::vector<double> p = {0.268432, 0.00018952, 9.41039};
+  // Initialize the pid variable.
+  std::vector<double> tp = {0.198116, 0.0161051, 2.34796};
   std::vector<double> p = {0.228018, 0.00732519, 7.54436};
-//  3.30619, -0.000949124, 9.89487: error of 0.0535367
-  std::vector<double> dp = {0.0115008, 0.000156183, 0.0348525};
-//  std::vector<double> dp = {1.0, 0.01, 1.0};
-//  std::vector<double> dp = {0.000271154, 3.01282e-06, 0.000328096};
-  std::vector<double> tdp = {0.000271154, 3.01282e-06, 0.000328096};
-//  std::vector<double> dp = {0.0261852, 3.20042e-05, 0.0214243};
 
-//  int i = 0;
-//  int k = 0;
-//  int step = 0;
-  int totalTimeSteps = 2000;
-  double target_throttle = 0.5;
+  int totalTimeSteps = 1000;
+  double target_throttle = 0.4;
 
-//  steerPid.best_t_error = 0.0;
-//  throttlePid.best_t_error = 0.0;
-
+  // initialize the PID controllers
   steerPid.Init(p);
   throttlePid.Init(tp);
 
+  // Should only update one at a time
+  steerPid.optimizing = false;
+  throttlePid.optimizing = true;
 
-  // Should probably only update one at a time
-  steerPid.optimizing = true;
-  throttlePid.optimizing = false;
-
+  // initialize twiddle with the totalTimeSteps
   Twiddle twiddle(totalTimeSteps);
 
   h.onMessage([&](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
@@ -88,8 +71,7 @@ int main()
           double angle = std::stod(j[1]["steering_angle"].get<std::string>());
           double steer_value, throttle;
           /*
-          * TODO: Calcuate steering value here, remember the steering value is
-          * [-1, 1].
+          * Calcuate steering value here, remember the steering value is [-1, 1].
           * NOTE: Feel free to play around with the throttle and speed. Maybe use
           * another PID controller to control the speed!
           */
@@ -108,95 +90,42 @@ int main()
           if(steer_value < -1.0) steer_value = -1.0;
 
           // normalize to the range of accepted
-//          throttle = throttlePid.TotalError() / 100.0;
-          throttle = target_throttle;
+          throttle = throttlePid.TotalError() / 100.0;
           // limit the throttle from 0.0 to 1.0
           if(throttle > 1.0) throttle = 1.0;
           if(throttle < 0.0) throttle = 0.0;
 
           // DEBUG
+//          std::cout << "Speed: " << speed << std::endl;
 //          std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
+//          std::cout << "TTE: " << tte << " Throttle: " << throttle << std::endl;
 
-//          if(throttlePid.optimizing) {
-//
-//          } else {
-//            json msgJson;
-//            msgJson["steering_angle"] = steer_value;
-//            msgJson["throttle"] = throttle;
-//            auto msg = "42[\"steer\"," + msgJson.dump() + "]";
-//            std::cout << msg << std::endl;
-//            ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
-//          }
-
-          if(!steerPid.optimizing && !throttlePid.optimizing) {
-            json msgJson;
-            msgJson["steering_angle"] = steer_value;
-            msgJson["throttle"] = throttle;
-            auto msg = "42[\"steer\"," + msgJson.dump() + "]";
-            std::cout << msg << std::endl;
-            ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
-          }
+          // Go ahead and create the message to send back to the sim
+          json msgJson;
+          msgJson["steering_angle"] = steer_value;
+          msgJson["throttle"] = throttle;
+          auto msg = "42[\"steer\"," + msgJson.dump() + "]";
 
           if(throttlePid.optimizing) {
+            // if we're optimizing the throttle PID coefficients
+            // consider it out of bounds if the absolute value of CTE is > 4.0
             bool outOfBounds = fabs(cte) > 4.0;
-            twiddle.Run(tte, ws, throttlePid, outOfBounds);
+            // set a reasonable maximum error for the target throttle error
+            twiddle.maxError = 100.0;
+            // run the twiddle optimizer
+            twiddle.Run(tte, ws, throttlePid, outOfBounds, msg);
           } else if(steerPid.optimizing) {
+            // if we're optimizing the steering PID coefficients
+            // consider it out of bounds if the absolute value of CTE is > 4.0
             bool outOfBounds = fabs(cte) > 4.0;
-            twiddle.Run(cte, ws, throttlePid, outOfBounds);
-          }
-
-          if(steerPid.optimizing) {
-
-            if(twiddle.i < twiddle.totalSteps) {
-
-
-              if(fabs(cte) > 4.0) {
-                // if the car goes off the track, add the square of the cross-track
-                // error for each future timestep until totalTimeSteps
-                twiddle.ExitEarly(4.0);
-
-              } else {
-                json msgJson;
-                msgJson["steering_angle"] = steer_value;
-                msgJson["throttle"] = throttle;
-                auto msg = "42[\"steer\"," + msgJson.dump() + "]";
-                ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
-
-                twiddle.UpdateOnTimeStep(cte);
-              }
-
-            }
-            if(twiddle.error == 16.0 * twiddle.totalSteps) {
-              // prevent erroneous second pass due to asynchronous nature of the socket connection
-              // Extra frames from the simulation were being received before the
-
-              // reset values
-              twiddle.Reset();
-              steerPid.Init(p);
-
-              std::string msg = "42[\"reset\",{}]";
-              ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
-              return;
-            }
-            if(twiddle.i == twiddle.totalSteps) {
-              // check exactly equal to totalTimeSteps.  A simple else clause was getting fired twice
-              std::cout << "Using Coeffecients: " << p[0] << ", " << p[1] << ", " << p[2] << std::endl;
-              std::cout << "dp: " << dp[0] << ", " << dp[1] << ", " << dp[2] << std::endl;
-
-              twiddle.UpdateCoefficients(p, dp);
-
-              if(dp[0] + dp[1] + dp[2] > 0.00001) {
-                // reset values
-                twiddle.Reset();
-                steerPid.Init(p);
-
-                std::string msg = "42[\"reset\",{}]";
-                ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
-
-              } else {
-                std::cout << "Converged Coeffecients: " << p[0] << ", " << p[1] << ", " << p[2] << std::endl;
-              }
-            }
+            // set a reasonable maximum error for the CTE. In this case, we're using the boundary value
+            twiddle.maxError = 4.0;
+            // run the twiddle optimizer
+            twiddle.Run(cte, ws, steerPid, outOfBounds, msg);
+          } else {
+            // if we're just running the simulator with the preset coefficient values
+            std::cout << msg << std::endl;
+            ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
           }
         }
       } else {

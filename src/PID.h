@@ -21,16 +21,7 @@ public:
   double Kd;
 
 
-  /*
-  * Twiddle Vars
-  */
-
-  // Twiddle Iteration
-  int i;
-  // Twiddle Error
-  double t_error;
-  // Best Twiddle Error
-  double best_t_error;
+  // Twiddle optimization
   bool optimizing;
 
   /*

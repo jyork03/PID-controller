@@ -12,6 +12,8 @@ using json = nlohmann::json;
 
 Twiddle::Twiddle(int totalSteps) {
   this->totalSteps = totalSteps;
+  firstNIgnoredSteps = 200;
+  dp = {0.00778083, 0.00129147, 0.707348};
 
   i = 0;
   j = 0;
@@ -27,21 +29,27 @@ void Twiddle::Reset() {
 }
 
 
-void Twiddle::ExitEarly(double maxError) {
+void Twiddle::ExitEarly() {
   // Add the square of the error for each future time step until totalSteps
   error += (totalSteps - i) * (maxError * maxError);
   i = totalSteps;
 }
 
 void Twiddle::UpdateOnTimeStep(double errorOnTimeStep) {
-  error += errorOnTimeStep * errorOnTimeStep;
+  if(i == firstNIgnoredSteps) {
+    std::cout << "Starting to record error..." << std::endl;
+  }
+  if(i > firstNIgnoredSteps) {
+    // don't start calculating error until after firstNIgnoredSteps
+    error += errorOnTimeStep * errorOnTimeStep;
+  }
   i++;
 }
 
 
-void Twiddle::UpdateCoefficients(std::vector<double> &p, std::vector<double> &dp) {
+void Twiddle::UpdateCoefficients(std::vector<double> &p) {
   // mean squared error
-  double mse = error / totalSteps;
+  double mse = error / (totalSteps - firstNIgnoredSteps);
 
   // Kp: coeff == 0 , Ki: coeff == 1, Kd: coeff == 2
   int coeff = j % 3;
@@ -108,18 +116,48 @@ void Twiddle::UpdateCoefficients(std::vector<double> &p, std::vector<double> &dp
   }
 }
 
-void Twiddle::Run(double error_t, uWS::WebSocket<uWS::SERVER> &ws, PID &pid, bool outOfBounds) {
+void Twiddle::Run(double error_t, uWS::WebSocket<uWS::SERVER> &ws, PID &pid, bool outOfBounds, std::string msg) {
   if(i < totalSteps) {
     if(outOfBounds) {
-      ExitEarly(4.0);
+      ExitEarly();
     } else {
-      json msgJson;
-      msgJson["steering_angle"] = steer_value;
-      msgJson["throttle"] = throttle;
-      auto msg = "42[\"steer\"," + msgJson.dump() + "]";
-      ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
-
       UpdateOnTimeStep(error_t);
+      ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+    }
+  }
+  if(error == (maxError * maxError) * (totalSteps - firstNIgnoredSteps)) {
+    // prevent erroneous second pass due to asynchronous nature of the socket connection
+    // Extra frames from the simulation were being received before the server initiated the restart.
+
+    // reset values
+    std::vector<double> p = {pid.Kp, pid.Ki, pid.Kd};
+    Reset();
+    pid.Init(p);
+
+    std::string reset_msg = "42[\"reset\",{}]";
+    ws.send(reset_msg.data(), reset_msg.length(), uWS::OpCode::TEXT);
+    return;
+  }
+  if(i == totalSteps) {
+    // check exactly equal to totalTimeSteps.  A simple else clause was getting fired twice
+
+    std::vector<double> p = {pid.Kp, pid.Ki, pid.Kd};
+
+    std::cout << "Using Coeffecients: " << p[0] << ", " << p[1] << ", " << p[2] << std::endl;
+    std::cout << "dp: " << dp[0] << ", " << dp[1] << ", " << dp[2] << std::endl;
+
+    UpdateCoefficients(p);
+
+    if(dp[0] + dp[1] + dp[2] > 0.00001) {
+      // reset values
+      Reset();
+      pid.Init(p);
+
+      std::string reset_msg = "42[\"reset\",{}]";
+      ws.send(reset_msg.data(), reset_msg.length(), uWS::OpCode::TEXT);
+
+    } else {
+      std::cout << "Converged Coeffecients: " << p[0] << ", " << p[1] << ", " << p[2] << std::endl;
     }
   }
 }
