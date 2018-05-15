@@ -4,3 +4,4 @@ tags
 .editorconfig
 cmake-build-debug/
 .idea/
+notes.txt

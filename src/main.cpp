@@ -37,11 +37,11 @@ int main()
   PID steerPid;
   PID throttlePid;
   // Initialize the pid variable.
-  std::vector<double> tp = {0.198116, 0.0161051, 2.34796};
-  std::vector<double> p = {0.228018, 0.00732519, 7.54436};
+  std::vector<double> tp = {5.19861, 0.00581063, 20.2038}; // achieve best error 10.175 & 0.4 throttle, 2000 totalTimesteps and 200 ignored steps
+  std::vector<double> p = {0.227726, 0.00736491, 20.5444};
 
-  int totalTimeSteps = 1000;
-  double target_throttle = 0.4;
+  int totalTimeSteps = 4000;
+  double target_throttle = 0.5;
 
   // initialize the PID controllers
   steerPid.Init(p);
@@ -49,7 +49,7 @@ int main()
 
   // Should only update one at a time
   steerPid.optimizing = false;
-  throttlePid.optimizing = true;
+  throttlePid.optimizing = false;
 
   // initialize twiddle with the totalTimeSteps
   Twiddle twiddle(totalTimeSteps);
@@ -124,7 +124,7 @@ int main()
             twiddle.Run(cte, ws, steerPid, outOfBounds, msg);
           } else {
             // if we're just running the simulator with the preset coefficient values
-            std::cout << msg << std::endl;
+//            std::cout << msg << std::endl;
             ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
           }
         }

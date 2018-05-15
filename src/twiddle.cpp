@@ -13,7 +13,7 @@ using json = nlohmann::json;
 Twiddle::Twiddle(int totalSteps) {
   this->totalSteps = totalSteps;
   firstNIgnoredSteps = 200;
-  dp = {0.00778083, 0.00129147, 0.707348};
+  dp = {0.000292492, 3.97212e-05, 0.0217556};
 
   i = 0;
   j = 0;

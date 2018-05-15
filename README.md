@@ -1,6 +1,8 @@
 # CarND-Controls-PID
 Self-Driving Car Engineer Nanodegree Program
 
+![Straight road, well adjusted with minimal error](./imgs/PID_Control4.jpg)
+
 ---
 
 ## Dependencies
@@ -36,3 +38,50 @@ There's an experimental patch for windows in this [PR](https://github.com/udacit
 4. Run it: `./pid`. 
 
 Tips for setting up your environment can be found [here](https://classroom.udacity.com/nanodegrees/nd013/parts/40f38239-66b6-46ec-ae68-03afd8a601c8/modules/0949fca6-b379-42af-a919-ee50aa304e6a/lessons/f758c44c-5e40-4e01-93b5-1a82aa4e044f/concepts/23d376c7-0195-4276-bdf0-e02f1f3c665d)
+
+## Reflection
+
+I decided to use PID control for both throttle and steering. PID 
+stands for Proportional, Integral and Derivative. 
+
+The Proportional component provides a consistent proportional 
+correction against the direction of the error.  
+
+The Integral component provides correction against the magnitude
+of the accumulated error over time. It aims at settling the process
+toward the goal value, and avoids settling on an offset-value.
+
+The Derivative component helps for swifter correction and improves
+settling time. It is effective at preventing overshoot.  It does not
+consider the magnitude of the error, but rather the rate of change
+of the error.  It aims at flattening the error trajectory.
+
+In regard to the simulator used in this project, the proportional and 
+integral steering coeffients were best set as low values--around 0.2 
+and 0.007 respectively.  The derivative component seemed to require 
+increases along with increases in the target throttle.
+
+I assumed a delta-time of 1 for the purposes of this project.
+
+The PID coefficient values were roughly chosen through manual tuning
+and then fine-tuned with twiddle optimization.
+
+The screenshots below showcase some of the decisions made by the PID
+controller in the simulation.  The steering PID controller is trying to
+keep the car centered, while the throttle PID controller is given a
+target throttle/speed of 0.5/50mph.
+
+Below: Between turns, and attempting to control oscillations
+![Between turns, and attempting to control oscillations](./imgs/PID_Control.jpg)
+
+Below: Hard left turn
+![Hard left turn](./imgs/PID_Control2.jpg)
+
+Below: Hard right turn
+![Hard right turn](./imgs/PID_Control3.jpg)
+
+Below: Straight road, well adjusted with minimal error.
+![Straight road, well adjusted with minimal error](./imgs/PID_Control4.jpg)
+
+Below: Hard, quick correction after an overshoot on a sharp turn. PID control, by itself, is ignorant of projected future states.
+![Hard, quick correction after an overshoot on a sharp turn](./imgs/PID_Control5.jpg)
