@@ -37,8 +37,8 @@ int main()
   PID steerPid;
   PID throttlePid;
   // Initialize the pid variable.
-  std::vector<double> tp = {5.19861, 0.00581063, 20.2038}; // achieve best error 10.175 & 0.4 throttle, 2000 totalTimesteps and 200 ignored steps
-  std::vector<double> p = {0.227726, 0.00736491, 20.5444};
+  std::vector<double> tp = {100.0, 0.005, 5.0};
+  std::vector<double> p = {0.22, 0.000005, 6.7};
 
   int totalTimeSteps = 4000;
   double target_throttle = 0.5;
@@ -48,13 +48,15 @@ int main()
   throttlePid.Init(tp);
 
   // Should only update one at a time
-  steerPid.optimizing = false;
+  steerPid.optimizing = true;
   throttlePid.optimizing = false;
 
   // initialize twiddle with the totalTimeSteps
   Twiddle twiddle(totalTimeSteps);
 
-  h.onMessage([&](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
+  h.onMessage(
+      [&steerPid, &throttlePid, &twiddle, &target_throttle]
+          (uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
@@ -80,17 +82,20 @@ int main()
           steerPid.UpdateError(cte);
 
           // update the proportional, integral and derivative target throttle error
+//          std::cout << speed << " " << target_throttle * 100.0 << std::endl;
           double tte = speed - (target_throttle * 100.0); // target throttle error
           throttlePid.UpdateError(tte);
 
           // normalize to the range of accepted steering angles -25 to 25 (50 total)
-          steer_value = steerPid.TotalError() / deg2rad(50.0);
+//          steer_value = steerPid.TotalError() / deg2rad(50.0);
+          steer_value = steerPid.TotalError();
           // limit the steer_value from -1.0 to 1.0
           if(steer_value > 1.0) steer_value = 1.0;
           if(steer_value < -1.0) steer_value = -1.0;
 
           // normalize to the range of accepted
           throttle = throttlePid.TotalError() / 100.0;
+//          std::cout << throttle << std::endl;
           // limit the throttle from 0.0 to 1.0
           if(throttle > 1.0) throttle = 1.0;
           if(throttle < 0.0) throttle = 0.0;
@@ -151,8 +156,16 @@ int main()
     }
   });
 
-  h.onConnection([&h](uWS::WebSocket<uWS::SERVER> ws, uWS::HttpRequest req) {
+  h.onConnection([&h, &steerPid, &throttlePid](uWS::WebSocket<uWS::SERVER> ws, uWS::HttpRequest req) {
     std::cout << "Connected!!!" << std::endl;
+
+    // go ahead and reset the errors for whichever pid is not the one currently optimizing.
+    if(steerPid.optimizing) {
+      throttlePid.ResetErrors();
+    }
+    if(throttlePid.optimizing) {
+      steerPid.ResetErrors();
+    }
   });
 
   h.onDisconnection([&h](uWS::WebSocket<uWS::SERVER> ws, int code, char *message, size_t length) {

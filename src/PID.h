@@ -40,6 +40,11 @@ public:
   void Init(std::vector<double> p);
 
   /*
+  * Reset accumulated PID errors.
+  */
+  void ResetErrors();
+
+  /*
   * Update the PID error variables given cross track error.
   */
   void UpdateError(double cte);

@@ -16,6 +16,12 @@ void PID::Init(std::vector<double> p) {
   d_error = 0.0;
 }
 
+void PID::ResetErrors() {
+  p_error = 0.0;
+  i_error = 0.0;
+  d_error = 0.0;
+}
+
 void PID::UpdateError(double cte) {
   // use the old p_error as the previous cte value
   d_error = cte - p_error;

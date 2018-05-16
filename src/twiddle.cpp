@@ -13,7 +13,7 @@ using json = nlohmann::json;
 Twiddle::Twiddle(int totalSteps) {
   this->totalSteps = totalSteps;
   firstNIgnoredSteps = 200;
-  dp = {0.000292492, 3.97212e-05, 0.0217556};
+  dp = {0.0005, 0.000001, 0.01};
 
   i = 0;
   j = 0;
@@ -54,10 +54,10 @@ void Twiddle::UpdateCoefficients(std::vector<double> &p) {
   // Kp: coeff == 0 , Ki: coeff == 1, Kd: coeff == 2
   int coeff = j % 3;
 
-
   if (best_mse == 0.0) {
     // first time through
     best_mse = mse;
+    std::cout << "mse: " << mse << std::endl;
 
     p[coeff] += dp[coeff];
   } else {
@@ -125,14 +125,13 @@ void Twiddle::Run(double error_t, uWS::WebSocket<uWS::SERVER> &ws, PID &pid, boo
       ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
     }
   }
-  if(error == (maxError * maxError) * (totalSteps - firstNIgnoredSteps)) {
+  if(error == (maxError * maxError) * totalSteps) {
     // prevent erroneous second pass due to asynchronous nature of the socket connection
     // Extra frames from the simulation were being received before the server initiated the restart.
 
     // reset values
-    std::vector<double> p = {pid.Kp, pid.Ki, pid.Kd};
     Reset();
-    pid.Init(p);
+    pid.ResetErrors();
 
     std::string reset_msg = "42[\"reset\",{}]";
     ws.send(reset_msg.data(), reset_msg.length(), uWS::OpCode::TEXT);
@@ -151,6 +150,7 @@ void Twiddle::Run(double error_t, uWS::WebSocket<uWS::SERVER> &ws, PID &pid, boo
     if(dp[0] + dp[1] + dp[2] > 0.00001) {
       // reset values
       Reset();
+      // initialize PID with new constants
       pid.Init(p);
 
       std::string reset_msg = "42[\"reset\",{}]";
