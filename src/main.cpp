@@ -34,11 +34,12 @@ int main()
 {
   uWS::Hub h;
 
+  // Initialize the pid variable.
   PID steerPid;
   PID throttlePid;
-  // Initialize the pid variable.
-  std::vector<double> tp = {100.0, 0.005, 5.0};
-  std::vector<double> p = {0.22, 0.000005, 6.7};
+
+  std::vector<double> tp = {100.0, 0.003, 5.0};
+  std::vector<double> p = {0.2205, 0.000005, 6.7081};
 
   int totalTimeSteps = 4000;
   double target_throttle = 0.5;
@@ -48,7 +49,7 @@ int main()
   throttlePid.Init(tp);
 
   // Should only update one at a time
-  steerPid.optimizing = true;
+  steerPid.optimizing = false;
   throttlePid.optimizing = false;
 
   // initialize twiddle with the totalTimeSteps
@@ -82,12 +83,10 @@ int main()
           steerPid.UpdateError(cte);
 
           // update the proportional, integral and derivative target throttle error
-//          std::cout << speed << " " << target_throttle * 100.0 << std::endl;
           double tte = speed - (target_throttle * 100.0); // target throttle error
           throttlePid.UpdateError(tte);
 
           // normalize to the range of accepted steering angles -25 to 25 (50 total)
-//          steer_value = steerPid.TotalError() / deg2rad(50.0);
           steer_value = steerPid.TotalError();
           // limit the steer_value from -1.0 to 1.0
           if(steer_value > 1.0) steer_value = 1.0;
@@ -95,7 +94,6 @@ int main()
 
           // normalize to the range of accepted
           throttle = throttlePid.TotalError() / 100.0;
-//          std::cout << throttle << std::endl;
           // limit the throttle from 0.0 to 1.0
           if(throttle > 1.0) throttle = 1.0;
           if(throttle < 0.0) throttle = 0.0;
