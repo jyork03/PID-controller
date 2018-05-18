@@ -72,16 +72,21 @@ keep the car centered, while the throttle PID controller is given a
 target throttle/speed of 0.5/50mph.
 
 Below: Between turns, and attempting to control oscillations
+
 ![Between turns, and attempting to control oscillations](./imgs/PID_Control.jpg)
 
 Below: Hard left turn
+
 ![Hard left turn](./imgs/PID_Control2.jpg)
 
 Below: Hard right turn
+
 ![Hard right turn](./imgs/PID_Control3.jpg)
 
 Below: Straight road, well adjusted with minimal error.
+
 ![Straight road, well adjusted with minimal error](./imgs/PID_Control4.jpg)
 
 Below: Hard, quick correction after an overshoot on a sharp turn. PID control, by itself, is ignorant of projected future states.
+
 ![Hard, quick correction after an overshoot on a sharp turn](./imgs/PID_Control5.jpg)
